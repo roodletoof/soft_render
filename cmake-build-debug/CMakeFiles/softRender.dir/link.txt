@@ -1,0 +1,1 @@
+/usr/bin/cc -g CMakeFiles/softRender.dir/main.c.o -o softRender  -lX11 -lm 

@@ -4,5 +4,6 @@ project(softRender C)
 set(CMAKE_C_STANDARD 17)
 
 link_libraries(X11)
+link_libraries(m)
 
 add_executable(softRender main.c)
