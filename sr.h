@@ -92,7 +92,7 @@ void sr_fill(
     (sr_surface) { \
         .width = WIDTH, \
         .height = HEIGHT, \
-        .pixels = (unsigned char[WIDTH*HEIGHT]) {}, \
+        .pixels = (unsigned char[WIDTH*HEIGHT]) {0}, \
         .invisible = 0 \
     }
 
