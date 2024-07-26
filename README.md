@@ -32,4 +32,4 @@ int main() {
 }
 ```
 
-![example_image](example.ppm)
+![example_image](example.png)
