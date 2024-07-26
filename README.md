@@ -2,7 +2,7 @@
 A single-header software rendering library.
 You create sr_surface types which you can draw bytes to.
 The simple circle- line- and rectangle-drawing function's assume a single pixel to be represented by a single byte.
-How that byte is visually interpreted is up to you to decide and implement.
+How that byte is interpreted, visually or otherwise, is up to you to decide and implement.
 A common approach might be to have the byte represent an index into a palette.
 
 # Using the library
