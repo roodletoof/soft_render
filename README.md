@@ -1,5 +1,6 @@
 # What is this?
-A single-header software rendering library.
+1. Unstable.
+2. A single-header software rendering library.
 You create sr_surface types which you can draw bytes to.
 The simple circle- line- and rectangle-drawing function's assume a single pixel to be represented by a single byte.
 How that byte is interpreted, visually or otherwise, is up to you to decide and implement.
