@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define SR_IMPLEMENTATION
 #include "sr.h"
@@ -10,7 +11,6 @@
 #define WIDTH 256
 #define HEIGHT 256
 
-sr_surface *screen = &sr_surface_value(WIDTH, HEIGHT);
 
 void ppm_save(const char* filename, sr_surface *surf) {
     FILE *f = fopen(filename, "wb");
@@ -38,7 +38,7 @@ int tests_total = 0;
 int tests_passed = 0;
 typedef enum {result_success, result_failure} result_t;
 
-result_t test(bool condition, char *condition_text, char *file, int line) {
+result_t test(sr_surface *screen, bool condition, char *condition_text, char *file, int line) {
 
     tests_total++;
     result_t result;
@@ -61,14 +61,15 @@ result_t test(bool condition, char *condition_text, char *file, int line) {
     return result;
 }
 
-#define test(condition) test(condition, #condition, __FILE__, __LINE__)
+// The screen parameter being filled in like this is dumb. Oh well.
+#define test(condition) test(screen, condition, #condition, __FILE__, __LINE__)
 
 #define BLACK 0
 #define GRAY 127
 #define WHITE 255
 
 int main() {
-
+    sr_surface *screen = &sr_surface_value(WIDTH, HEIGHT);
     screen->invisible = BLACK;
 
 
@@ -170,7 +171,6 @@ int main() {
         test(sr_get_pixel(screen, 50, 50) == GRAY);
 
     }
-
 
     { // TEST with other palette
 
@@ -279,6 +279,23 @@ int main() {
         test(sr_get_pixel(screen, 101, 101) == map[BLACK]);
         test(sr_get_pixel(screen, 50, 50) == map[GRAY]);
 
+        sr_pal_reset();
+    }
+
+
+    { // heap surface test
+        sr_surface *screen = sr_surface_malloc(malloc, WIDTH, HEIGHT);
+        test(screen != NULL);
+        sr_fill(screen, GRAY);
+
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                test(sr_get_pixel(screen, x, y) == GRAY);
+            }
+        }
+
+        free(screen);
+        screen = NULL;
     }
 
     // RESULT MESSAGE

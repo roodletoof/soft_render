@@ -1,6 +1,8 @@
 #ifndef SR_HEADER
 #define SR_HEADER
 
+#include <stddef.h>
+
 typedef struct sr_surface {
     const int width;
     const int height;
@@ -22,6 +24,8 @@ void sr_blit( sr_surface *destination, int dest_x, int dest_y, sr_surface *sourc
 void sr_blit_pro( sr_surface *destination, int dest_x, int dest_y, int dest_width, int dest_height, sr_surface *source, int source_x, int source_y, int source_width, int source_height);
 void sr_fill( sr_surface *self, unsigned char color);
 
+// The masked variants of the functions will only draw to non-invisible pixels on the destination/self surfaces.
+
 void sr_pixel_masked( sr_surface *self, unsigned char color, int x, int y);
 void sr_line_masked( sr_surface *self, unsigned char color, int x0, int y0, int x1, int y1);
 void sr_rect_fill_masked( sr_surface *self, unsigned char color, int x, int y, int width, int height);
@@ -32,6 +36,12 @@ void sr_blit_masked( sr_surface *destination, int dest_x, int dest_y, sr_surface
 void sr_blit_pro_masked( sr_surface *destination, int dest_x, int dest_y, int dest_width, int dest_height, sr_surface *source, int source_x, int source_y, int source_width, int source_height);
 void sr_fill_masked( sr_surface *self, unsigned char color);
 
+// Both the sr_surface and the associated pixels will be allocated in a single call of the allocator.
+// If malloc is used; calling free on the returned pointer will therefore free the entire surface.
+// The allocator should return NULL on failure to allocate the memory.
+sr_surface *sr_surface_malloc(void *(*allocator)(size_t), int width, int height);
+
+// Use this macro to guarrantee a valid static or stack sr_surface value.
 #define sr_surface_value(WIDTH, HEIGHT) \
     (sr_surface) { \
         .width = WIDTH, \
@@ -40,8 +50,6 @@ void sr_fill_masked( sr_surface *self, unsigned char color);
         .invisible = 0 \
     }
 
-// TODO remove this
-#define SR_IMPLEMENTATION
 #ifdef SR_IMPLEMENTATION
 
 static unsigned char color_map[256] = {
@@ -64,7 +72,7 @@ static unsigned char color_map[256] = {
 };
 
 
-static inline void clamp_range(
+static inline void sr_internal_clamp_range(
         sr_surface *self,
         int start_x,
         int start_y,
@@ -97,14 +105,14 @@ static inline void clamp_range(
     }
 }
 
-static void circle_line(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
+static void sr_internal_circle_line(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
     sr_line(self, color, center_x+x, center_y+y, center_x+x, center_y-y);
     sr_line(self, color, center_x-x, center_y+y, center_x-x, center_y-y);
     sr_line(self, color, center_x+y, center_y+x, center_x+y, center_y-x);
     sr_line(self, color, center_x-y, center_y+x, center_x-y, center_y-x);
 }
 
-static void circle_pixel(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
+static void sr_internal_circle_pixel(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
     sr_pixel(self, color, center_x+x, center_y+y);
     sr_pixel(self, color, center_x-x, center_y+y);
     sr_pixel(self, color, center_x+x, center_y-y);
@@ -113,6 +121,17 @@ static void circle_pixel(sr_surface *self, unsigned char color, int center_x, in
     sr_pixel(self, color, center_x-y, center_y+x);
     sr_pixel(self, color, center_x+y, center_y-x);
     sr_pixel(self, color, center_x-y, center_y-x);
+}
+
+sr_surface *sr_surface_malloc(void *(*allocator)(size_t), int width, int height) {
+    sr_surface *self;
+    self = (typeof(self)) allocator(sizeof(*self) + sizeof(*(self->pixels)) * width * height);
+    if (!self) return self;
+    *(int *)&self->width = width;
+    *(int *)&self->height = height;
+    self->invisible = 0;
+    *(unsigned char **)&self->pixels = ((unsigned char*) (self+1));
+    return self;
 }
 
 unsigned char sr_get_pixel(
@@ -129,7 +148,7 @@ unsigned char sr_get_pixel(
     return self->invisible;
 }
 
-static int abs(int i) {
+static int sr_internal_abs(int i) {
     return i < 0 ? -i : i;
 }
 
@@ -171,9 +190,9 @@ void sr_line(
 ) {
     // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 
-    int dx = abs(x1 - x0);
+    int dx = sr_internal_abs(x1 - x0);
     int sx = x0 < x1 ? 1 : -1;
-    int dy = -abs(y1 - y0);
+    int dy = -sr_internal_abs(y1 - y0);
     int sy = y0 < y1 ? 1 : -1;
     int error = dx + dy;
 
@@ -209,7 +228,7 @@ void sr_rect_fill(
     int height
 ) {
     int start_x, start_y, stop_x, stop_y;
-    clamp_range(self, x, y, x+width, y+height, &start_x, &start_y, &stop_x, &stop_y);
+    sr_internal_clamp_range(self, x, y, x+width, y+height, &start_x, &start_y, &stop_x, &stop_y);
     for (int curr_y = start_y; curr_y < stop_y; curr_y++ ) {
         for (int curr_x = start_x; curr_x < stop_x; curr_x++ ) {
             self->pixels[curr_y * self->width + curr_x] = color_map[color];
@@ -245,7 +264,7 @@ void sr_circle_fill(
     int outer_x = 0;
     int outer_y = radius;
     int d = 3 - 2 * radius;
-    circle_line(self, color, x, y, outer_x, outer_y);
+    sr_internal_circle_line(self, color, x, y, outer_x, outer_y);
     while ( outer_y >= outer_x ) {
         outer_x++;
         if ( d > 0 ) {
@@ -254,7 +273,7 @@ void sr_circle_fill(
         } else {
             d = d + 4 * outer_x + 6;
         }
-        circle_line(self, color, x, y, outer_x, outer_y);
+        sr_internal_circle_line(self, color, x, y, outer_x, outer_y);
     }
 }
 
@@ -269,7 +288,7 @@ void sr_circle_outline(
     int outer_x = 0;
     int outer_y = radius;
     int d = 3 - 2 * radius;
-    circle_pixel(self, color, x, y, outer_x, outer_y);
+    sr_internal_circle_pixel(self, color, x, y, outer_x, outer_y);
     while ( outer_y >= outer_x ) {
         outer_x++;
         if ( d > 0 ) {
@@ -278,7 +297,7 @@ void sr_circle_outline(
         } else {
             d = d + 4 * outer_x + 6;
         }
-        circle_pixel(self, color, x, y, outer_x, outer_y);
+        sr_internal_circle_pixel(self, color, x, y, outer_x, outer_y);
     }
 }
 
@@ -289,7 +308,7 @@ void sr_blit(
     sr_surface *source
 ) {
     int start_x, start_y, stop_x, stop_y;
-    clamp_range(destination, dest_x, dest_y, dest_x+source->width, dest_y+source->height, &start_x, &start_y, &stop_x, &stop_y);
+    sr_internal_clamp_range(destination, dest_x, dest_y, dest_x+source->width, dest_y+source->height, &start_x, &start_y, &stop_x, &stop_y);
     for ( int y = start_y; y < stop_y; y++ ) {
         for ( int x = start_x; x < stop_x; x++ ) {
             unsigned char color = sr_get_pixel(source, x-start_x, y-start_y);
@@ -312,7 +331,7 @@ void sr_blit_pro(
     int source_height
 ) {
     int start_x, start_y, stop_x, stop_y;
-    clamp_range(destination, dest_x, dest_y, dest_x+dest_width, dest_y+dest_height, &start_x, &start_y, &stop_x, &stop_y);
+    sr_internal_clamp_range(destination, dest_x, dest_y, dest_x+dest_width, dest_y+dest_height, &start_x, &start_y, &stop_x, &stop_y);
     for (int y = start_y; y < stop_y; y++) {
         for (int x = start_x; x < stop_x; x++) {
             int s_x = source_x + (source_width) * (x-dest_x) / (dest_width);
@@ -334,14 +353,14 @@ void sr_fill(
     }
 }
 
-static void circle_line_masked(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
+static void sr_internal_circle_line_masked(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
     sr_line_masked(self, color, center_x+x, center_y+y, center_x+x, center_y-y);
     sr_line_masked(self, color, center_x-x, center_y+y, center_x-x, center_y-y);
     sr_line_masked(self, color, center_x+y, center_y+x, center_x+y, center_y-x);
     sr_line_masked(self, color, center_x-y, center_y+x, center_x-y, center_y-x);
 }
 
-static void circle_pixel_masked(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
+static void sr_internal_circle_pixel_masked(sr_surface *self, unsigned char color, int center_x, int center_y, int x, int y) {
     sr_pixel_masked(self, color, center_x+x, center_y+y);
     sr_pixel_masked(self, color, center_x-x, center_y+y);
     sr_pixel_masked(self, color, center_x+x, center_y-y);
@@ -377,9 +396,9 @@ void sr_line_masked(
     int y1
 ) {
     // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-    int dx = abs(x1 - x0);
+    int dx = sr_internal_abs(x1 - x0);
     int sx = x0 < x1 ? 1 : -1;
-    int dy = -abs(y1 - y0);
+    int dy = -sr_internal_abs(y1 - y0);
     int sy = y0 < y1 ? 1 : -1;
     int error = dx + dy;
     while (1) {
@@ -414,7 +433,7 @@ void sr_rect_fill_masked(
     int height
 ) {
     int start_x, start_y, stop_x, stop_y;
-    clamp_range(self, x, y, x+width, y+height, &start_x, &start_y, &stop_x, &stop_y);
+    sr_internal_clamp_range(self, x, y, x+width, y+height, &start_x, &start_y, &stop_x, &stop_y);
     for (int curr_y = start_y; curr_y < stop_y; curr_y++ ) {
         for (int curr_x = start_x; curr_x < stop_x; curr_x++ ) {
             if (self->pixels[curr_y * self->width + curr_x] == self->invisible) {continue;}
@@ -452,7 +471,7 @@ void sr_circle_fill_masked(
     int outer_x = 0;
     int outer_y = radius;
     int d = 3 - 2 * radius;
-    circle_line_masked(self, color, x, y, outer_x, outer_y);
+    sr_internal_circle_line_masked(self, color, x, y, outer_x, outer_y);
     while ( outer_y >= outer_x ) {
         outer_x++;
         if ( d > 0 ) {
@@ -461,7 +480,7 @@ void sr_circle_fill_masked(
         } else {
             d = d + 4 * outer_x + 6;
         }
-        circle_line_masked(self, color, x, y, outer_x, outer_y);
+        sr_internal_circle_line_masked(self, color, x, y, outer_x, outer_y);
     }
 }
 
@@ -476,7 +495,7 @@ void sr_circle_outline_masked(
     int outer_x = 0;
     int outer_y = radius;
     int d = 3 - 2 * radius;
-    circle_pixel_masked(self, color, x, y, outer_x, outer_y);
+    sr_internal_circle_pixel_masked(self, color, x, y, outer_x, outer_y);
     while ( outer_y >= outer_x ) {
         outer_x++;
         if ( d > 0 ) {
@@ -485,7 +504,7 @@ void sr_circle_outline_masked(
         } else {
             d = d + 4 * outer_x + 6;
         }
-        circle_pixel_masked(self, color, x, y, outer_x, outer_y);
+        sr_internal_circle_pixel_masked(self, color, x, y, outer_x, outer_y);
     }
 }
 
@@ -496,7 +515,7 @@ void sr_blit_masked(
     sr_surface *source
 ) {
     int start_x, start_y, stop_x, stop_y;
-    clamp_range(destination, dest_x, dest_y, dest_x+source->width, dest_y+source->height, &start_x, &start_y, &stop_x, &stop_y);
+    sr_internal_clamp_range(destination, dest_x, dest_y, dest_x+source->width, dest_y+source->height, &start_x, &start_y, &stop_x, &stop_y);
     for ( int y = start_y; y < stop_y; y++ ) {
         for ( int x = start_x; x < stop_x; x++ ) {
             unsigned char color = sr_get_pixel(source, x-start_x, y-start_y);
@@ -519,7 +538,7 @@ void sr_blit_pro_masked(
     int source_height
 ) {
     int start_x, start_y, stop_x, stop_y;
-    clamp_range(destination, dest_x, dest_y, dest_x+dest_width, dest_y+dest_height, &start_x, &start_y, &stop_x, &stop_y);
+    sr_internal_clamp_range(destination, dest_x, dest_y, dest_x+dest_width, dest_y+dest_height, &start_x, &start_y, &stop_x, &stop_y);
     for (int y = start_y; y < stop_y; y++) {
         for (int x = start_x; x < stop_x; x++) {
             int s_x = source_x + (source_width) * (x-dest_x) / (dest_width);
