@@ -68,10 +68,32 @@ result_t test(sr_surface *screen, bool condition, char *condition_text, char *fi
 #define GRAY 127
 #define WHITE 255
 
+// MAGIC is a canary value to test that the pixel address calculation is correct.
+// The point is to use the pointer of test_alloc_surf as the result of sr_surface_malloc, and fill it with certain pixels that dont match MAGIC.
+// And I want to make sure that the first value after the first MAGIC number is an int containing the width of the surface.
+// And I want to check that the byte just before the second MAGIC number is a pixel I drew into the buffer.
+#define MAGIC 113
+void *testing_malloc(size_t size) {
+    size_t size_final = size + 2 * sizeof(char);
+    char *ptr = (char *) malloc(size_final);
+    ptr[0] = MAGIC;
+    ptr[size_final - 1] = MAGIC; // think this only works because the size of char is 1
+    return (void *) &ptr[1];
+}
+void testing_free(void *ptr) {
+    char *_ptr = (char *) ptr;
+    _ptr--;
+    sr_surface *screen = ptr;
+    test(_ptr[0] == MAGIC);
+    test(_ptr[sizeof(sr_surface) + sizeof(unsigned char) * WIDTH * HEIGHT + 1] == MAGIC);
+    free(_ptr);
+}
+
 int main() {
+
+
     sr_surface *screen = &sr_surface_value(WIDTH, HEIGHT);
     screen->invisible = BLACK;
-
 
     { // TEST
 
@@ -204,7 +226,6 @@ int main() {
         test(sr_get_pixel(screen, 64+65, 64) == map[BLACK]);
         test(sr_get_pixel(screen, 64, 64+65) == map[BLACK]);
         test(sr_get_pixel(screen, 128, 128) == map[BLACK]);
-
         sr_fill(screen, BLACK);
         sr_circle_outline(screen, WHITE, 64, 64, 64);
         test(sr_get_pixel(screen, 64, 64) == map[BLACK]);
@@ -260,7 +281,6 @@ int main() {
         test(sr_get_pixel(screen, 101, 100) == map[BLACK]);
         test(sr_get_pixel(screen, 101, 101) == map[BLACK]);
         test(sr_get_pixel(screen, 50, 50) == map[WHITE]);
-
         sr_fill(screen, BLACK);
         sr_rect_outline(screen, WHITE, 1, 1, 100, 100);
         test(sr_get_pixel(screen, 0, 0) == map[BLACK]);
@@ -282,7 +302,6 @@ int main() {
         sr_pal_reset();
     }
 
-
     { // heap surface test
         sr_surface *screen = sr_surface_malloc(malloc, WIDTH, HEIGHT);
         test(screen != NULL);
@@ -295,6 +314,11 @@ int main() {
         }
 
         free(screen);
+        screen = sr_surface_malloc(testing_malloc, WIDTH, HEIGHT);
+        sr_fill(screen, GRAY);
+        test(*(int*)screen == screen->width);
+        test(sr_get_pixel(screen, screen->width-1, screen->height-1) == GRAY);
+        testing_free(screen);
         screen = NULL;
     }
 
