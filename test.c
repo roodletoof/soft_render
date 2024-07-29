@@ -303,6 +303,7 @@ int main() {
     }
 
     { // heap surface test
+        // simple functionality test
         sr_surface *screen = sr_surface_malloc(malloc, WIDTH, HEIGHT);
         test(screen != NULL);
         sr_fill(screen, GRAY);
@@ -313,6 +314,7 @@ int main() {
             }
         }
 
+        // making sure that I actually allocated exactly enough memory for the sr_surface type
         free(screen);
         screen = sr_surface_malloc(testing_malloc, WIDTH, HEIGHT);
         sr_fill(screen, GRAY);
