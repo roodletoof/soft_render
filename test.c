@@ -117,7 +117,6 @@ int main() {
         test(sr_get_pixel(screen, 64+65, 64) == BLACK);
         test(sr_get_pixel(screen, 64, 64+65) == BLACK);
         test(sr_get_pixel(screen, 128, 128) == BLACK);
-
         sr_fill(screen, BLACK);
         sr_circle_outline(screen, WHITE, 64, 64, 64);
         test(sr_get_pixel(screen, 64, 64) == BLACK);
@@ -173,7 +172,6 @@ int main() {
         test(sr_get_pixel(screen, 101, 100) == BLACK);
         test(sr_get_pixel(screen, 101, 101) == BLACK);
         test(sr_get_pixel(screen, 50, 50) == WHITE);
-
         sr_fill(screen, BLACK);
         sr_rect_outline(screen, WHITE, 1, 1, 100, 100);
         test(sr_get_pixel(screen, 0, 0) == BLACK);
@@ -192,6 +190,7 @@ int main() {
         test(sr_get_pixel(screen, 101, 101) == BLACK);
         test(sr_get_pixel(screen, 50, 50) == GRAY);
 
+        // triangle
     }
 
     { // TEST with other palette
